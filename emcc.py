@@ -666,19 +666,23 @@ def process_dynamic_libs(dylibs, lib_dirs):
 
   dylibs += extras
   for dylib in dylibs:
+    exports = webassembly.get_exports(dylib)
+    exports = set(e.name for e in exports)
+    settings.SIDE_MODULE_EXPORTS.extend(exports)
+
     imports = webassembly.get_imports(dylib)
     imports = [i.field for i in imports if i.kind in (webassembly.ExternType.FUNC, webassembly.ExternType.GLOBAL)]
-    settings.SIDE_MODULE_IMPORTS.extend(imports)
-    logger.debug('Adding symbols requirements from `%s`: %s', dylib, imports)
+    imports = set(i for i in imports if not i.startswith('invoke_'))
+    weak_imports = imports.intersection(exports)
+    strong_imports = imports.difference(exports)
+    settings.SIDE_MODULE_IMPORTS.extend(strong_imports)
+    logger.debug('Adding symbols requirements from `%s`: %s', dylib, strong_imports)
 
-    exports = webassembly.get_exports(dylib)
-    for export in exports:
-      settings.SIDE_MODULE_EXPORTS.append(export.name)
-
-  mangled_imports = [shared.asmjs_mangle(e) for e in settings.SIDE_MODULE_IMPORTS]
-  settings.EXPORTED_FUNCTIONS.extend(mangled_imports)
-  settings.DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.extend(settings.SIDE_MODULE_IMPORTS)
-  building.user_requested_exports.update(mangled_imports)
+    mangled_imports = [shared.asmjs_mangle(e) for e in strong_imports]
+    settings.EXPORTED_FUNCTIONS.extend(mangled_imports)
+    settings.EXPORT_IF_DEFINED.extend(weak_imports)
+    settings.DEFAULT_LIBRARY_FUNCS_TO_INCLUDE.extend(strong_imports)
+    building.user_requested_exports.update(mangled_imports)
 
 
 def unmangle_symbols_from_cmdline(symbols):
@@ -1731,6 +1735,9 @@ def phase_setup(state):
   if settings.SIDE_MODULE:
     default_setting('ERROR_ON_UNDEFINED_SYMBOLS', 0)
     default_setting('WARN_ON_UNDEFINED_SYMBOLS', 0)
+  else:
+    settings.EXPORT_IF_DEFINED.append('__start_em_asm')
+    settings.EXPORT_IF_DEFINED.append('__stop_em_asm')
 
   if 'DISABLE_EXCEPTION_CATCHING' in settings_map and 'EXCEPTION_CATCHING_ALLOWED' in settings_map:
     # If we get here then the user specified both DISABLE_EXCEPTION_CATCHING and EXCEPTION_CATCHING_ALLOWED

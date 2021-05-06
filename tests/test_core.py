@@ -8341,6 +8341,7 @@ NODEFS is no longer included by default; build with -lnodefs.js
     self.emcc_args.append('-Wno-experimental')
     self.set_setting('EXIT_RUNTIME')
     self.set_setting('USE_PTHREADS')
+    self.set_setting('LLD_REPORT_UNDEFINED')
     self.set_setting('PTHREAD_POOL_SIZE=2')
     main = test_file('core', 'pthread', 'test_pthread_dylink.c')
     side = test_file('core', 'pthread', 'test_pthread_dylink_side.c')
